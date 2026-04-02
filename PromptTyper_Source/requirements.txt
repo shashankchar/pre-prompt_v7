@@ -1,0 +1,6 @@
+keyboard==0.13.5
+pystray==0.19.5
+Pillow==10.4.0
+pywin32==311
+psutil==6.1.1
+plyer==2.1.0
