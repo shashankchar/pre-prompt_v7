@@ -5,6 +5,11 @@ set "ROOT_DIR=%~dp0"
 set "LOCAL_EXE=%ROOT_DIR%bin\PromptTyper.exe"
 set "BRIDGE_DIR=%APPDATA%\espanso\config\text_automation_tool"
 set "BRIDGE_STARTED=0"
+set "PROMPT_BANK_PATH=%ROOT_DIR%index.html"
+set "PROMPT_BANK_DATA_PATH=%ROOT_DIR%prompt_bank_data.json"
+
+rem Prevent stale tray/background conflicts from older launches.
+taskkill /F /IM PromptTyper.exe >nul 2>nul
 
 if exist "%LOCAL_EXE%" (
   start "" /min "%LOCAL_EXE%"
