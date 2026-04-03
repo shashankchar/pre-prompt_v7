@@ -462,6 +462,29 @@ header h1 {
   margin-bottom: 14px;
 }
 
+.organization-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.organization-filters label {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #9ec8ff;
+}
+
+.organization-filters select {
+  background: #101015;
+  color: var(--text-light);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
 .quick-filter {
   padding: 9px 14px;
   border-radius: 999px;
@@ -530,6 +553,40 @@ header h1 {
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+}
+
+.prompt-card.is-selected {
+  outline: 2px solid #1888ff;
+}
+
+.prompt-card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.prompt-card-title-row h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.prompt-card-star {
+  font-size: 1.05rem;
+  color: #ffd35a;
+}
+
+.prompt-card-tagline {
+  margin: 8px 0 0;
+  color: #d3d5de;
+  font-size: 0.9rem;
+}
+
+.prompt-card-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .prompt-card .card-meta {
@@ -708,6 +765,61 @@ header h1 {
 .admin-checkbox input {
   width: 18px;
   height: 18px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.modal-backdrop.hidden {
+  display: none;
+}
+
+.modal-card {
+  width: min(720px, 100%);
+  max-height: min(85vh, 900px);
+  overflow: auto;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(22, 22, 22, 0.98), rgba(12, 12, 12, 0.99));
+  box-shadow: var(--shadow);
+}
+
+.modal-card h3 {
+  margin: 0 0 10px;
+}
+
+.modal-card p {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+}
+
+.modal-form {
+  display: grid;
+  gap: 10px;
+}
+
+.modal-field {
+  display: grid;
+  gap: 6px;
+}
+
+.modal-field span {
+  font-size: 0.9rem;
+  color: #ffe0bb;
+}
+
+#testOutput {
+  margin-top: 14px;
+  min-height: 180px;
 }
 
 .admin-preview {

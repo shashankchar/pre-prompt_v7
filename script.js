@@ -253,6 +253,8 @@ const bridgeStatusEl = document.getElementById("bridgeStatus");
 const searchForm = document.getElementById("searchForm");
 const searchInputEl = document.getElementById("searchInput");
 const searchClearBtn = document.getElementById("searchClearBtn");
+const folderFilterEl = document.getElementById("folderFilter");
+const tagFilterEl = document.getElementById("tagFilter");
 const heroTrackEl = document.getElementById("heroTrack");
 const heroDotsEl = document.getElementById("heroDots");
 const heroKickerEl = document.getElementById("heroKicker");
@@ -268,6 +270,8 @@ const adminForm = document.getElementById("adminForm");
 const adminPromptIdEl = document.getElementById("adminPromptId");
 const adminTitleEl = document.getElementById("adminTitle");
 const adminCategoryEl = document.getElementById("adminCategory");
+const adminFolderEl = document.getElementById("adminFolder");
+const adminTagsEl = document.getElementById("adminTags");
 const adminTaglineEl = document.getElementById("adminTagline");
 const adminPromptEl = document.getElementById("adminPrompt");
 const adminImageEl = document.getElementById("adminImage");
@@ -277,9 +281,24 @@ const adminImagePreviewEl = document.getElementById("adminImagePreview");
 const adminResetBtn = document.getElementById("adminResetBtn");
 const adminStatusEl = document.getElementById("adminStatus");
 const adminListEl = document.getElementById("adminList");
+const exportPromptsBtn = document.getElementById("exportPromptsBtn");
+const importPromptsBtn = document.getElementById("importPromptsBtn");
+const importPromptsFile = document.getElementById("importPromptsFile");
 const introOverlayEl = document.getElementById("introOverlay");
 const introStatusEl = document.getElementById("introStatus");
 const introAudioEl = document.getElementById("introAudio");
+const variablesModalEl = document.getElementById("variablesModal");
+const variablesHelpEl = document.getElementById("variablesHelp");
+const variablesFormEl = document.getElementById("variablesForm");
+const variablesCancelBtn = document.getElementById("variablesCancelBtn");
+const variablesSubmitBtn = document.getElementById("variablesSubmitBtn");
+const testModalEl = document.getElementById("testModal");
+const testModalTitleEl = document.getElementById("testModalTitle");
+const testInputEl = document.getElementById("testInput");
+const testOutputEl = document.getElementById("testOutput");
+const testRunBtn = document.getElementById("testRunBtn");
+const testCloseBtn = document.getElementById("testCloseBtn");
+const testOpenNewTabBtn = document.getElementById("testOpenNewTabBtn");
 
 const promptTyperBridgeUrl = "http://127.0.0.1:8765";
 
@@ -293,6 +312,12 @@ let editingExistingImage = "";
 let searchQuery = "";
 let activeQuickFilter = "all";
 let promptMeta = {};
+let activeFolderFilter = "";
+let activeTagFilter = "";
+let selectedPromptIndex = -1;
+let pendingVariableSubmission = null;
+let pendingPlaygroundPrompt = null;
+let renderedPromptIds = [];
 
 const promptMetaStorageKey = "prompt_bank_meta_v1";
 const introMinMs = 450;
@@ -312,10 +337,22 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function parseTagList(value) {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((tag) => String(tag || "").trim()).filter(Boolean))];
+  }
+  return [...new Set(String(value || "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean))];
+}
+
 function normalizePrompt(item, index) {
   const title = String(item.title || `Untitled Prompt ${index + 1}`).trim();
   const prompt = String(item.prompt || item.content || "").trim();
   const category = String(item.category || "General").trim() || "General";
+  const folder = String(item.folder || category || "General").trim() || "General";
+  const tags = parseTagList(item.tags);
   const tagline = String(item.tagline || "").trim();
   const id = String(item.id || slugify(title) || `prompt-${index + 1}`);
   const mainImage = String(item.mainImage || item.heroImage || item.image || item.images?.[0] || "").trim();
@@ -330,11 +367,16 @@ function normalizePrompt(item, index) {
     id,
     title,
     category,
+    folder,
+    tags,
     tagline,
     prompt,
     images,
     mainImage,
     featuredInSlider: Boolean(item.featuredInSlider ?? item.featured ?? mainImage),
+    versions: Array.isArray(item.versions) ? item.versions.slice(0, 5) : [],
+    usageCount: Number(item.usageCount || 0),
+    lastUsedAt: Number(item.lastUsedAt || 0),
   };
 }
 
@@ -364,6 +406,14 @@ function getPromptMeta(id) {
 
 function getCategories() {
   return [...new Set(promptData.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function getFolders() {
+  return [...new Set(promptData.map((item) => item.folder || item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function getTags() {
+  return [...new Set(promptData.flatMap((item) => item.tags || []).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
 function getDisplayImages(item) {
@@ -400,10 +450,16 @@ function renderPromptList() {
   let visiblePrompts = promptData.filter((item) => {
     const categoryMatch = selectedCategory === "All" || item.category === selectedCategory;
     if (!categoryMatch) return false;
+    const folderMatch = !activeFolderFilter || (item.folder || item.category) === activeFolderFilter;
+    if (!folderMatch) return false;
+    const tagMatch = !activeTagFilter || (item.tags || []).includes(activeTagFilter);
+    if (!tagMatch) return false;
     if (!loweredQuery) return true;
 
     const haystack = [
       item.title,
+      item.folder,
+      (item.tags || []).join(" "),
       item.category,
       item.tagline,
       item.prompt
@@ -429,25 +485,79 @@ function renderPromptList() {
     if (aMeta.favorite !== bMeta.favorite) return aMeta.favorite ? -1 : 1;
     return a.title.localeCompare(b.title);
   });
+  renderedPromptIds = visiblePrompts.map((item) => item.id);
 
-  visiblePrompts.forEach((item) => {
-    const card = document.createElement("button");
-    card.type = "button";
+  selectedPromptIndex = visiblePrompts.length ? Math.min(selectedPromptIndex, visiblePrompts.length - 1) : -1;
+  if (selectedPromptIndex < 0 && visiblePrompts.length) {
+    selectedPromptIndex = 0;
+  }
+
+  visiblePrompts.forEach((item, index) => {
+    const card = document.createElement("article");
     card.className = "prompt-card";
+    card.setAttribute("data-prompt-index", String(index));
+    card.classList.toggle("is-selected", selectedPromptIndex === index);
     const meta = getPromptMeta(item.id);
     const markers = [];
     if (meta.pinned) markers.push("PINNED");
-    if (meta.favorite) markers.push("FAVORITE");
-    const titleNode = document.createElement("span");
+    if (meta.favorite) markers.push("STARRED");
+    if (item.folder) markers.push(`FOLDER: ${item.folder}`);
+    if (item.tags?.length) markers.push(`TAGS: ${item.tags.join(", ")}`);
+    markers.push(`USED: ${item.usageCount || 0}`);
+    if (item.lastUsedAt) {
+      markers.push(`LAST USED: ${new Date(item.lastUsedAt).toLocaleString()}`);
+    }
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "prompt-card-title-row";
+    const titleNode = document.createElement("h4");
     titleNode.textContent = item.title;
-    card.appendChild(titleNode);
+    const star = document.createElement("span");
+    star.className = "prompt-card-star";
+    star.textContent = meta.favorite ? "★" : "☆";
+    titleRow.appendChild(titleNode);
+    titleRow.appendChild(star);
+    card.appendChild(titleRow);
+
+    if (item.tagline) {
+      const tagline = document.createElement("p");
+      tagline.className = "prompt-card-tagline";
+      tagline.textContent = item.tagline;
+      card.appendChild(tagline);
+    }
+
     if (markers.length) {
       const metaNode = document.createElement("span");
       metaNode.className = "card-meta";
       metaNode.textContent = markers.join(" | ");
       card.appendChild(metaNode);
     }
-    card.addEventListener("click", () => showPromptDetails(item.id));
+
+    const actions = document.createElement("div");
+    actions.className = "prompt-card-actions";
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "action-btn action-btn-secondary";
+    openBtn.textContent = "Open";
+    openBtn.addEventListener("click", () => showPromptDetails(item.id));
+
+    const testBtn = document.createElement("button");
+    testBtn.type = "button";
+    testBtn.className = "action-btn action-btn-secondary";
+    testBtn.textContent = "Test Prompt";
+    testBtn.addEventListener("click", () => openTestModal(item));
+
+    const sendBtn = document.createElement("button");
+    sendBtn.type = "button";
+    sendBtn.className = "action-btn";
+    sendBtn.textContent = "Send";
+    sendBtn.addEventListener("click", () => handlePromptSend(item.title, item.prompt));
+
+    actions.appendChild(openBtn);
+    actions.appendChild(testBtn);
+    actions.appendChild(sendBtn);
+    card.appendChild(actions);
+
     promptGridEl.appendChild(card);
   });
 
@@ -471,7 +581,7 @@ function showPromptDetails(promptId) {
   detailTaglineEl.textContent = item.tagline || item.category;
   detailPromptTextEl.textContent = item.prompt;
   togglePinBtn.textContent = itemMeta.pinned ? "Unpin" : "Pin";
-  toggleFavoriteBtn.textContent = itemMeta.favorite ? "Unfavorite" : "Favorite";
+  toggleFavoriteBtn.textContent = itemMeta.favorite ? "★ Unstar" : "☆ Star";
 
   screenshotsRowEl.innerHTML = "";
   getDisplayImages(item).slice(0, 5).forEach((src, index) => {
@@ -625,6 +735,7 @@ function renderAdminList() {
 function renderAll() {
   renderCategories();
   renderQuickFilters();
+  renderOrganizationFilters();
   renderPromptList();
   renderAdminList();
   setupHeroSlider();
@@ -637,6 +748,20 @@ function renderQuickFilters() {
     const isActive = button.getAttribute("data-quick-filter") === activeQuickFilter;
     button.classList.toggle("active", isActive);
   });
+}
+
+function renderOrganizationFilters() {
+  if (!folderFilterEl || !tagFilterEl) return;
+  const folders = getFolders();
+  const tags = getTags();
+
+  folderFilterEl.innerHTML = `<option value="">All folders</option>${folders
+    .map((folder) => `<option value="${folder}">${folder}</option>`).join("")}`;
+  tagFilterEl.innerHTML = `<option value="">All tags</option>${tags
+    .map((tag) => `<option value="${tag}">${tag}</option>`).join("")}`;
+
+  folderFilterEl.value = activeFolderFilter;
+  tagFilterEl.value = activeTagFilter;
 }
 
 function collectIntroImageUrls() {
@@ -879,6 +1004,136 @@ async function sendPromptToPromptTyper(title, content, source) {
   }
 }
 
+function parsePromptVariables(template) {
+  const found = [];
+  const seen = new Set();
+  const doubleBraces = /{{\s*([a-zA-Z0-9_]+)\s*}}/g;
+  const labeled = /{([a-zA-Z0-9_]+):([^}]+)}/g;
+  const bracketed = /\[([^\]]+)\]/g;
+  let match;
+
+  while ((match = doubleBraces.exec(template)) !== null) {
+    const key = match[1];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    found.push({ key, label: key, token: match[0], type: "double" });
+  }
+
+  while ((match = labeled.exec(template)) !== null) {
+    const key = match[1];
+    const label = String(match[2] || key).trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    found.push({ key, label, token: match[0], type: "labeled" });
+  }
+
+  while ((match = bracketed.exec(template)) !== null) {
+    const label = String(match[1] || "").trim();
+    if (!label) continue;
+    const baseKey = slugify(label).replace(/-/g, "_") || `var_${found.length + 1}`;
+    let key = baseKey;
+    let suffix = 2;
+    while (seen.has(key)) {
+      key = `${baseKey}_${suffix}`;
+      suffix += 1;
+    }
+    seen.add(key);
+    found.push({ key, label, token: match[0], type: "bracket" });
+  }
+
+  return found;
+}
+
+function applyPromptVariables(template, values, vars = []) {
+  let output = String(template || "");
+  Object.entries(values).forEach(([key, value]) => {
+    const safeValue = String(value ?? "");
+    const reDouble = new RegExp(`{{\\s*${key}\\s*}}`, "g");
+    const reLabeled = new RegExp(`{${key}:[^}]+}`, "g");
+    output = output.replace(reDouble, safeValue).replace(reLabeled, safeValue);
+  });
+  vars.forEach((variable) => {
+    if (variable.type !== "bracket") return;
+    const replacement = String(values[variable.key] ?? "");
+    output = output.split(variable.token).join(replacement);
+  });
+  return output;
+}
+
+function closeVariablesModal() {
+  pendingVariableSubmission = null;
+  variablesFormEl.innerHTML = "";
+  variablesModalEl.classList.add("hidden");
+}
+
+function openVariablesModal(title, template, onSubmit) {
+  const vars = parsePromptVariables(template);
+  if (!vars.length) {
+    onSubmit(template);
+    return;
+  }
+
+  pendingVariableSubmission = { title, template, onSubmit, vars };
+  variablesHelpEl.textContent = `Template "${title}" has ${vars.length} variable(s). Fill and continue.`;
+  variablesFormEl.innerHTML = "";
+  vars.forEach((variable) => {
+    const wrap = document.createElement("label");
+    wrap.className = "modal-field";
+    const label = document.createElement("span");
+    label.textContent = variable.label;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "admin-input";
+    input.setAttribute("data-variable-key", variable.key);
+    input.placeholder = `Enter ${variable.label}`;
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    variablesFormEl.appendChild(wrap);
+  });
+  variablesModalEl.classList.remove("hidden");
+  const first = variablesFormEl.querySelector("input[data-variable-key]");
+  if (first) first.focus();
+}
+
+async function handlePromptSend(title, template, source = "Prompt Bank", button = null) {
+  const oldText = button?.textContent || saveToPromptTyperBtn.textContent;
+  if (button) button.textContent = "Opening...";
+  else saveToPromptTyperBtn.textContent = "Opening...";
+
+  openVariablesModal(title, template, async (filledPrompt) => {
+    try {
+      await sendPromptToPromptTyper(title, filledPrompt, source);
+      if (button) button.textContent = "Opened in PromptTyper";
+      else saveToPromptTyperBtn.textContent = "Opened in PromptTyper";
+      const prompt = promptData.find((entry) => entry.title === title && entry.prompt === template);
+      if (prompt) {
+        prompt.usageCount = Number(prompt.usageCount || 0) + 1;
+        prompt.lastUsedAt = Date.now();
+        await savePromptLibrary().catch(() => {});
+        renderPromptList();
+      }
+    } catch (_error) {
+      if (button) button.textContent = "PromptTyper Offline";
+      else saveToPromptTyperBtn.textContent = "PromptTyper Offline";
+    } finally {
+      await checkPromptTyperBridge();
+      setTimeout(() => {
+        if (button) button.textContent = oldText;
+        else saveToPromptTyperBtn.textContent = oldText;
+      }, 1600);
+    }
+  });
+}
+
+function openTestModal(promptItem) {
+  pendingPlaygroundPrompt = promptItem;
+  testModalTitleEl.textContent = `Test Prompt: ${promptItem.title}`;
+  testInputEl.value = "";
+  testOutputEl.textContent = "Type input and click Run Test.";
+  testModalEl.classList.remove("hidden");
+  testInputEl.focus();
+}
+
 function loadPromptIntoAdmin(promptId) {
   const item = promptData.find((entry) => entry.id === promptId);
   if (!item) return;
@@ -886,6 +1141,8 @@ function loadPromptIntoAdmin(promptId) {
   adminPromptIdEl.value = item.id;
   adminTitleEl.value = item.title;
   adminCategoryEl.value = item.category;
+  adminFolderEl.value = item.folder || item.category || "";
+  adminTagsEl.value = (item.tags || []).join(", ");
   adminTaglineEl.value = item.tagline;
   adminPromptEl.value = item.prompt;
   adminFeaturedEl.checked = Boolean(item.mainImage && item.featuredInSlider);
@@ -903,6 +1160,8 @@ function resetAdminForm() {
   pendingAdminImageData = "";
   editingExistingImage = "";
   adminFeaturedEl.checked = false;
+  adminFolderEl.value = "";
+  adminTagsEl.value = "";
   adminStatusEl.textContent = "";
   updateAdminPreview("");
 }
@@ -1123,18 +1382,7 @@ copyBtn.addEventListener("click", () => {
 saveToPromptTyperBtn.addEventListener("click", async () => {
   const title = saveToPromptTyperBtn.getAttribute("data-prompt-title") || currentDetailPrompt?.title || "Imported Prompt";
   const content = saveToPromptTyperBtn.getAttribute("data-prompt-content") || currentDetailPrompt?.prompt || "";
-  const oldText = saveToPromptTyperBtn.textContent;
-  saveToPromptTyperBtn.textContent = "Opening...";
-  try {
-    await sendPromptToPromptTyper(title, content, "Prompt Bank");
-    saveToPromptTyperBtn.textContent = "Opened in PromptTyper";
-  } catch (_error) {
-    saveToPromptTyperBtn.textContent = "PromptTyper Offline";
-  }
-  await checkPromptTyperBridge();
-  setTimeout(() => {
-    saveToPromptTyperBtn.textContent = oldText;
-  }, 1800);
+  await handlePromptSend(title, content, "Prompt Bank", null);
 });
 
 togglePinBtn.addEventListener("click", () => {
@@ -1151,7 +1399,7 @@ toggleFavoriteBtn.addEventListener("click", () => {
   const meta = getPromptMeta(currentDetailPrompt.id);
   meta.favorite = !meta.favorite;
   savePromptMeta();
-  toggleFavoriteBtn.textContent = meta.favorite ? "Unfavorite" : "Favorite";
+  toggleFavoriteBtn.textContent = meta.favorite ? "★ Unstar" : "☆ Star";
   renderPromptList();
 });
 
@@ -1184,6 +1432,91 @@ quickFiltersEl.addEventListener("click", (event) => {
   renderPromptList();
 });
 
+folderFilterEl?.addEventListener("change", () => {
+  activeFolderFilter = folderFilterEl.value;
+  renderPromptList();
+});
+
+tagFilterEl?.addEventListener("change", () => {
+  activeTagFilter = tagFilterEl.value;
+  renderPromptList();
+});
+
+variablesCancelBtn?.addEventListener("click", closeVariablesModal);
+variablesSubmitBtn?.addEventListener("click", () => {
+  if (!pendingVariableSubmission) return;
+  const values = {};
+  pendingVariableSubmission.vars.forEach((variable) => {
+    const input = variablesFormEl.querySelector(`[data-variable-key="${variable.key}"]`);
+    values[variable.key] = input ? input.value : "";
+  });
+  const filled = applyPromptVariables(
+    pendingVariableSubmission.template,
+    values,
+    pendingVariableSubmission.vars
+  );
+  const submit = pendingVariableSubmission.onSubmit;
+  closeVariablesModal();
+  submit(filled);
+});
+
+testCloseBtn?.addEventListener("click", () => {
+  pendingPlaygroundPrompt = null;
+  testModalEl.classList.add("hidden");
+});
+
+testRunBtn?.addEventListener("click", () => {
+  if (!pendingPlaygroundPrompt) return;
+  const input = testInputEl.value.trim();
+  const template = pendingPlaygroundPrompt.prompt || "";
+  const vars = parsePromptVariables(template);
+  const values = { input, user_input: input, query: input };
+  vars.forEach((variable) => {
+    if (!values[variable.key]) {
+      values[variable.key] = input;
+    }
+  });
+  const withInput = applyPromptVariables(template, values, vars);
+  testOutputEl.textContent = withInput;
+});
+
+testOpenNewTabBtn?.addEventListener("click", () => {
+  const encoded = encodeURIComponent(testOutputEl.textContent || pendingPlaygroundPrompt?.prompt || "");
+  window.open(`https://chat.openai.com/?q=${encoded}`, "_blank", "noopener");
+});
+
+exportPromptsBtn?.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify({ prompts: promptData, exportedAt: Date.now() }, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `prompt-bank-export-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+importPromptsBtn?.addEventListener("click", () => importPromptsFile?.click());
+importPromptsFile?.addEventListener("change", async () => {
+  const [file] = importPromptsFile.files || [];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    const incoming = Array.isArray(payload) ? payload : payload.prompts;
+    if (!Array.isArray(incoming)) throw new Error("Invalid import file.");
+    promptData = incoming.map(normalizePrompt);
+    await savePromptLibrary();
+    renderAll();
+    adminStatusEl.textContent = "Import successful.";
+  } catch (error) {
+    adminStatusEl.textContent = error.message || "Import failed.";
+  } finally {
+    importPromptsFile.value = "";
+  }
+});
+
 adminImageEl.addEventListener("change", async () => {
   const [file] = adminImageEl.files || [];
   if (!file) {
@@ -1206,16 +1539,33 @@ adminForm.addEventListener("submit", async (event) => {
   }
 
   const id = adminPromptIdEl.value.trim() || slugify(title) || `prompt-${Date.now()}`;
+  const existing = promptData.find((entry) => entry.id === id);
   const mainImage = pendingAdminImageData || editingExistingImage || "";
+  const nextVersions = Array.isArray(existing?.versions) ? [...existing.versions] : [];
+  if (existing) {
+    nextVersions.unshift({
+      title: existing.title,
+      prompt: existing.prompt,
+      tagline: existing.tagline,
+      tags: existing.tags || [],
+      folder: existing.folder || existing.category || "General",
+      editedAt: Date.now()
+    });
+  }
   const item = normalizePrompt({
     id,
     title,
     category: adminCategoryEl.value.trim() || "General",
+    folder: adminFolderEl.value.trim() || adminCategoryEl.value.trim() || "General",
+    tags: parseTagList(adminTagsEl.value),
     tagline: adminTaglineEl.value.trim(),
     prompt,
     mainImage,
     images: mainImage ? [mainImage] : [],
     featuredInSlider: Boolean(mainImage && adminFeaturedEl.checked),
+    versions: nextVersions.slice(0, 5),
+    usageCount: Number(existing?.usageCount || 0),
+    lastUsedAt: Number(existing?.lastUsedAt || 0),
   }, 0);
 
   const existingIndex = promptData.findIndex((entry) => entry.id === id);
@@ -1251,22 +1601,43 @@ imagePromptGridEl.addEventListener("click", (event) => {
 
   const saveButton = event.target.closest("button[data-save-content]");
   if (!saveButton) return;
-  const oldText = saveButton.textContent;
-  saveButton.textContent = "Opening...";
-  sendPromptToPromptTyper(
+  handlePromptSend(
     saveButton.getAttribute("data-save-title") || "Imported Prompt",
     saveButton.getAttribute("data-save-content") || "",
-    "Prompt Bank"
-  ).then(() => {
-    saveButton.textContent = "Opened in PromptTyper";
-  }).catch(() => {
-    saveButton.textContent = "PromptTyper Offline";
-  }).finally(async () => {
-    await checkPromptTyperBridge();
-    setTimeout(() => {
-      saveButton.textContent = oldText;
-    }, 1800);
-  });
+    "Prompt Bank",
+    saveButton
+  );
+});
+
+document.addEventListener("keydown", (event) => {
+  const tag = event.target?.tagName?.toLowerCase();
+  const isTyping = tag === "input" || tag === "textarea" || event.target?.isContentEditable;
+  if (event.key === "Escape") {
+    if (!variablesModalEl.classList.contains("hidden")) closeVariablesModal();
+    if (!testModalEl.classList.contains("hidden")) {
+      pendingPlaygroundPrompt = null;
+      testModalEl.classList.add("hidden");
+    }
+    return;
+  }
+  if (isTyping) return;
+  if (detailViewEl.classList.contains("hidden")) {
+    if (event.key === "ArrowDown" && renderedPromptIds.length) {
+      event.preventDefault();
+      selectedPromptIndex = Math.min(renderedPromptIds.length - 1, selectedPromptIndex + 1);
+      renderPromptList();
+      document.querySelector(`.prompt-card[data-prompt-index="${selectedPromptIndex}"]`)?.scrollIntoView({ block: "nearest" });
+    } else if (event.key === "ArrowUp" && renderedPromptIds.length) {
+      event.preventDefault();
+      selectedPromptIndex = Math.max(0, selectedPromptIndex - 1);
+      renderPromptList();
+      document.querySelector(`.prompt-card[data-prompt-index="${selectedPromptIndex}"]`)?.scrollIntoView({ block: "nearest" });
+    } else if (event.key === "Enter" && selectedPromptIndex >= 0 && renderedPromptIds[selectedPromptIndex]) {
+      event.preventDefault();
+      const item = promptData.find((entry) => entry.id === renderedPromptIds[selectedPromptIndex]);
+      if (item) handlePromptSend(item.title, item.prompt, "Prompt Bank");
+    }
+  }
 });
 
 window.addEventListener("resize", () => {

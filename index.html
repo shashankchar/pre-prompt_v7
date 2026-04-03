@@ -71,6 +71,16 @@
       <button class="quick-filter" type="button" data-quick-filter="favorites">Favorites</button>
       <button class="quick-filter" type="button" data-quick-filter="recent">Recent</button>
     </section>
+    <section class="organization-filters" id="organizationFilters" aria-label="Organization filters">
+      <label for="folderFilter">Folder</label>
+      <select id="folderFilter">
+        <option value="">All folders</option>
+      </select>
+      <label for="tagFilter">Tag</label>
+      <select id="tagFilter">
+        <option value="">All tags</option>
+      </select>
+    </section>
 
     <section class="orange-box prompts-panel" id="promptsPanel" aria-label="Prompt list">
       <div class="prompt-grid" id="promptGrid"></div>
@@ -125,6 +135,12 @@
             <label class="admin-label" for="adminCategory">Category</label>
             <input class="admin-input" id="adminCategory" type="text" placeholder="Education, Filmmaking, Content Writing" />
 
+            <label class="admin-label" for="adminFolder">Folder</label>
+            <input class="admin-input" id="adminFolder" type="text" placeholder="Work, Study, Marketing..." />
+
+            <label class="admin-label" for="adminTags">Tags (comma separated)</label>
+            <input class="admin-input" id="adminTags" type="text" placeholder="seo, writing, beginner" />
+
             <label class="admin-label" for="adminTagline">Tagline</label>
             <input class="admin-input" id="adminTagline" type="text" placeholder="Short description for card and details view" />
 
@@ -154,6 +170,11 @@
 
         <section class="orange-box admin-panel">
           <h3 class="admin-heading">Saved Prompts</h3>
+          <div class="action-row">
+            <button class="action-btn action-btn-secondary" id="exportPromptsBtn" type="button">Export All</button>
+            <button class="action-btn action-btn-secondary" id="importPromptsBtn" type="button">Import JSON</button>
+            <input id="importPromptsFile" type="file" accept="application/json" class="hidden" />
+          </div>
           <div class="admin-list" id="adminList"></div>
         </section>
       </div>
@@ -162,6 +183,32 @@
     <section class="bottom-tools" aria-label="Bottom actions">
       <button class="hero-btn hero-btn-primary" id="openAdminBtn" type="button">Add Prompt</button>
     </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="variablesModal">
+    <div class="modal-card">
+      <h3>Fill Prompt Variables</h3>
+      <p id="variablesHelp"></p>
+      <form id="variablesForm" class="modal-form"></form>
+      <div class="action-row">
+        <button class="action-btn action-btn-secondary" id="variablesCancelBtn" type="button">Cancel</button>
+        <button class="action-btn" id="variablesSubmitBtn" type="button">Use and Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="testModal">
+    <div class="modal-card">
+      <h3 id="testModalTitle">Test Prompt</h3>
+      <label for="testInput">Your input</label>
+      <textarea id="testInput" class="admin-textarea" placeholder="Type any context/question..."></textarea>
+      <div class="action-row">
+        <button class="action-btn action-btn-secondary" id="testCloseBtn" type="button">Close</button>
+        <button class="action-btn action-btn-secondary" id="testOpenNewTabBtn" type="button">Open in New Tab</button>
+        <button class="action-btn" id="testRunBtn" type="button">Run Test</button>
+      </div>
+      <div class="orange-box prompt-text-box" id="testOutput"></div>
+    </div>
   </div>
 
   <script src="./script.js"></script>
