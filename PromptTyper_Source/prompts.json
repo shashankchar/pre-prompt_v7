@@ -1,0 +1,14 @@
+{
+  "ctrl+alt+b": {
+    "title": "Clean Code Prompt",
+    "content": "You are a senior developer. Refactor the following code..."
+  },
+  "ctrl+alt+d": {
+    "title": "Debug Prompt",
+    "content": "Act as a debugging expert. Analyze this error..."
+  },
+  "ctrl+alt+c": {
+    "title": "Debug Prompt",
+    "content": "Ahi..."
+  }
+}
