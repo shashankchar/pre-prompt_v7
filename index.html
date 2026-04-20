@@ -7,16 +7,6 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <audio id="introAudio" preload="auto" autoplay playsinline>
-    <source src="./where-is-my-mind-fightclub.mp3" type="audio/mpeg" />
-  </audio>
-  <div class="intro-overlay" id="introOverlay" aria-live="polite">
-    <div class="intro-center">
-      <p class="intro-kicker">Prompt Streaming Library</p>
-      <h1 class="intro-title">Prompts Bank</h1>
-      <p class="intro-status" id="introStatus">Loading visual library...</p>
-    </div>
-  </div>
   <div class="container">
     <header>
       <p class="eyebrow">Prompt Streaming Library</p>
@@ -98,6 +88,7 @@
         <button class="action-btn action-btn-secondary" id="togglePinBtn">Pin</button>
         <button class="action-btn action-btn-secondary" id="toggleFavoriteBtn">Favorite</button>
         <button class="action-btn" id="copyBtn">Copy Prompt</button>
+        <button class="action-btn action-btn-secondary" id="detailTestBtn">Test Prompt</button>
         <button class="action-btn action-btn-secondary" id="saveToPromptTyperBtn">Save to PromptTyper</button>
         <button class="action-btn" id="backBtn">Back to Prompts</button>
       </div>
@@ -204,9 +195,10 @@
       <textarea id="testInput" class="admin-textarea" placeholder="Type any context/question..."></textarea>
       <div class="action-row">
         <button class="action-btn action-btn-secondary" id="testCloseBtn" type="button">Close</button>
-        <button class="action-btn action-btn-secondary" id="testOpenNewTabBtn" type="button">Open in New Tab</button>
         <button class="action-btn" id="testRunBtn" type="button">Run Test</button>
       </div>
+      <div class="ai-launcher-row" id="aiLauncherRow" aria-label="AI launchers"></div>
+      <p class="admin-help">Tip: click any AI button to open with current rendered prompt.</p>
       <div class="orange-box prompt-text-box" id="testOutput"></div>
     </div>
   </div>

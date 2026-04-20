@@ -197,7 +197,9 @@ class PromptManagerWindow:
             return
 
         try:
-            os.startfile(self.prompt_bank_path)
+            prompt_bank_uri = Path(self.prompt_bank_path).resolve().as_uri()
+            target = f"{prompt_bank_uri}?from=prompttyper&intro=1"
+            webbrowser.open(target)
         except Exception as exc:
             self.logger.exception("Failed to open Prompt Bank: %s", exc)
             messagebox.showerror("Prompt Bank", "Could not open Prompt Bank.")
@@ -208,7 +210,7 @@ class PromptManagerWindow:
             return
 
         try:
-            admin_target = f"{Path(self.prompt_bank_path).resolve().as_uri()}#admin"
+            admin_target = f"{Path(self.prompt_bank_path).resolve().as_uri()}?from=prompttyper&intro=1#admin"
             webbrowser.open(admin_target)
         except Exception as exc:
             self.logger.exception("Failed to open Prompt Bank admin: %s", exc)

@@ -247,6 +247,7 @@ const screenshotsRowEl = document.getElementById("screenshotsRow");
 const togglePinBtn = document.getElementById("togglePinBtn");
 const toggleFavoriteBtn = document.getElementById("toggleFavoriteBtn");
 const copyBtn = document.getElementById("copyBtn");
+const detailTestBtn = document.getElementById("detailTestBtn");
 const saveToPromptTyperBtn = document.getElementById("saveToPromptTyperBtn");
 const backBtn = document.getElementById("backBtn");
 const bridgeStatusEl = document.getElementById("bridgeStatus");
@@ -284,9 +285,6 @@ const adminListEl = document.getElementById("adminList");
 const exportPromptsBtn = document.getElementById("exportPromptsBtn");
 const importPromptsBtn = document.getElementById("importPromptsBtn");
 const importPromptsFile = document.getElementById("importPromptsFile");
-const introOverlayEl = document.getElementById("introOverlay");
-const introStatusEl = document.getElementById("introStatus");
-const introAudioEl = document.getElementById("introAudio");
 const variablesModalEl = document.getElementById("variablesModal");
 const variablesHelpEl = document.getElementById("variablesHelp");
 const variablesFormEl = document.getElementById("variablesForm");
@@ -298,7 +296,7 @@ const testInputEl = document.getElementById("testInput");
 const testOutputEl = document.getElementById("testOutput");
 const testRunBtn = document.getElementById("testRunBtn");
 const testCloseBtn = document.getElementById("testCloseBtn");
-const testOpenNewTabBtn = document.getElementById("testOpenNewTabBtn");
+const aiLauncherRowEl = document.getElementById("aiLauncherRow");
 
 const promptTyperBridgeUrl = "http://127.0.0.1:8765";
 
@@ -318,16 +316,48 @@ let selectedPromptIndex = -1;
 let pendingVariableSubmission = null;
 let pendingPlaygroundPrompt = null;
 let renderedPromptIds = [];
+let customAiLaunchers = [];
 
 const promptMetaStorageKey = "prompt_bank_meta_v1";
-const introMinMs = 450;
-const introMaxWaitMs = 1800;
+const aiLaunchersStorageKey = "prompt_bank_ai_launchers_v1";
+const defaultAiLaunchers = [
+  {
+    id: "chatgpt",
+    name: "ChatGPT",
+    symbol: "C",
+    iconUrl: "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+    urlTemplate: "https://chatgpt.com/?q={{prompt}}"
+  },
+  {
+    id: "gemini",
+    name: "Gemini",
+    symbol: "G",
+    iconUrl: "https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64",
+    urlTemplate: "https://gemini.google.com/app?q={{prompt}}"
+  },
+  {
+    id: "grok",
+    name: "Grok",
+    symbol: "X",
+    iconUrl: "https://www.google.com/s2/favicons?domain=grok.com&sz=64",
+    urlTemplate: "https://grok.com/?q={{prompt}}"
+  },
+  {
+    id: "deepseek",
+    name: "DeepSeek",
+    symbol: "D",
+    iconUrl: "https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=64",
+    urlTemplate: "https://chat.deepseek.com/?q={{prompt}}"
+  },
+  {
+    id: "perchance",
+    name: "Perchance",
+    symbol: "P",
+    iconUrl: "https://www.google.com/s2/favicons?domain=perchance.org&sz=64",
+    urlTemplate: "https://perchance.org/ai-text-generator?q={{prompt}}"
+  }
+];
 const netTimeoutMs = 1800;
-const introAudioStartSec = 5;
-const introAudioEndSec = 10;
-const introAudioTargetVolume = 0.85;
-const introAudioFadeInSec = 0.8;
-const introAudioFadeOutSec = 0.8;
 
 function slugify(value) {
   return String(value || "")
@@ -397,6 +427,208 @@ function savePromptMeta() {
   localStorage.setItem(promptMetaStorageKey, JSON.stringify(promptMeta));
 }
 
+function loadAiLaunchers() {
+  try {
+    const raw = localStorage.getItem(aiLaunchersStorageKey);
+    if (!raw) {
+      customAiLaunchers = [];
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      customAiLaunchers = [];
+      return;
+    }
+    customAiLaunchers = parsed
+      .filter((item) => item && typeof item === "object")
+      .map((item) => ({
+        id: String(item.id || `custom-${Date.now()}`),
+        name: String(item.name || "Custom AI").trim() || "Custom AI",
+        symbol: String(item.symbol || "").trim(),
+        iconUrl: String(item.iconUrl || "").trim(),
+        urlTemplate: String(item.urlTemplate || "").trim()
+      }))
+      .filter((item) => /^https?:\/\//i.test(item.urlTemplate));
+  } catch (_error) {
+    customAiLaunchers = [];
+  }
+}
+
+function saveAiLaunchers() {
+  localStorage.setItem(aiLaunchersStorageKey, JSON.stringify(customAiLaunchers));
+}
+
+function providerSymbol(provider) {
+  const custom = String(provider.symbol || "").trim();
+  if (custom) return custom.slice(0, 2);
+  const name = String(provider.name || "").trim();
+  return name ? name.slice(0, 1).toUpperCase() : "?";
+}
+
+function fallbackFaviconForTemplate(urlTemplate) {
+  try {
+    const firstPart = String(urlTemplate || "").split("{{prompt}}")[0] || "";
+    const parsed = new URL(firstPart);
+    return `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=64`;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function getAllAiLaunchers() {
+  return [...defaultAiLaunchers, ...customAiLaunchers];
+}
+
+function buildProviderUrl(urlTemplate, promptText) {
+  const encoded = encodeURIComponent(promptText);
+  if (urlTemplate.includes("{{prompt}}")) {
+    return urlTemplate.replace(/{{prompt}}/g, encoded);
+  }
+  if (urlTemplate.includes("%s")) {
+    return urlTemplate.replace(/%s/g, encoded);
+  }
+  return urlTemplate + (urlTemplate.includes("?") ? "&q=" : "?q=") + encoded;
+}
+
+function getPlaygroundRenderedPrompt() {
+  if (!pendingPlaygroundPrompt) return "";
+  const input = testInputEl.value.trim();
+  const template = pendingPlaygroundPrompt.prompt || "";
+  const vars = parsePromptVariables(template);
+  const values = { input, user_input: input, query: input };
+  vars.forEach((variable) => {
+    if (!values[variable.key]) {
+      values[variable.key] = input;
+    }
+  });
+  return applyPromptVariables(template, values, vars);
+}
+
+function openPromptInProvider(provider) {
+  const content = (testOutputEl.textContent || "").trim();
+  const rendered = content && content !== "Type input and click Run Test."
+    ? content
+    : getPlaygroundRenderedPrompt();
+  if (!rendered) {
+    testOutputEl.textContent = "Run test first or type input.";
+    return;
+  }
+  const url = buildProviderUrl(provider.urlTemplate, rendered);
+  window.open(url, "_blank", "noopener");
+}
+
+function promptForNewAiLauncher() {
+  const name = window.prompt("AI name (example: Claude, Perplexity):", "");
+  if (name === null) return;
+  const cleanName = String(name).trim();
+  if (!cleanName) return;
+
+  const url = window.prompt(
+    "AI URL template. Use {{prompt}} where prompt should be inserted.\nExample: https://example.com/?q={{prompt}}",
+    "https://"
+  );
+  if (url === null) return;
+  const cleanUrl = String(url).trim();
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    window.alert("Please enter a valid URL starting with http:// or https://");
+    return;
+  }
+  let iconUrl = "";
+  try {
+    const origin = new URL(cleanUrl).origin;
+    iconUrl = `${origin}/favicon.ico`;
+  } catch (_error) {
+    iconUrl = "";
+  }
+
+  customAiLaunchers.push({
+    id: `custom-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+    name: cleanName,
+    symbol: cleanName.slice(0, 1).toUpperCase(),
+    iconUrl,
+    urlTemplate: cleanUrl
+  });
+  saveAiLaunchers();
+  renderAiLaunchers();
+}
+
+function removeCustomAiLauncher(id) {
+  customAiLaunchers = customAiLaunchers.filter((item) => item.id !== id);
+  saveAiLaunchers();
+  renderAiLaunchers();
+}
+
+function renderAiLaunchers() {
+  if (!aiLauncherRowEl) return;
+  aiLauncherRowEl.innerHTML = "";
+  getAllAiLaunchers().forEach((provider) => {
+    const wrap = document.createElement("div");
+    wrap.className = "launcher-chip";
+
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "action-btn action-btn-secondary launcher-open-btn";
+    const icon = document.createElement("img");
+    icon.className = "launcher-icon";
+    icon.alt = "";
+    const primaryIcon = provider.iconUrl || fallbackFaviconForTemplate(provider.urlTemplate);
+    const secondaryIcon = fallbackFaviconForTemplate(provider.urlTemplate);
+    icon.src = primaryIcon || "";
+    icon.loading = "lazy";
+    icon.referrerPolicy = "no-referrer";
+
+    const fallback = document.createElement("span");
+    fallback.className = "launcher-fallback";
+    fallback.textContent = providerSymbol(provider);
+    fallback.hidden = Boolean(provider.iconUrl);
+
+    if (provider.iconUrl) {
+      icon.addEventListener("error", () => {
+        if (secondaryIcon && icon.src !== secondaryIcon) {
+          icon.src = secondaryIcon;
+          return;
+        }
+        icon.hidden = true;
+        fallback.hidden = false;
+      });
+      icon.addEventListener("load", () => {
+        icon.hidden = false;
+        fallback.hidden = true;
+      });
+    } else {
+      icon.hidden = true;
+    }
+
+    openBtn.appendChild(icon);
+    openBtn.appendChild(fallback);
+    openBtn.setAttribute("data-launcher-open", provider.id);
+    openBtn.setAttribute("title", provider.name);
+    openBtn.setAttribute("aria-label", provider.name);
+    wrap.appendChild(openBtn);
+
+    if (provider.id.startsWith("custom-")) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "launcher-remove-btn";
+      removeBtn.textContent = "x";
+      removeBtn.setAttribute("data-launcher-remove", provider.id);
+      removeBtn.setAttribute("aria-label", `Remove ${provider.name}`);
+      wrap.appendChild(removeBtn);
+    }
+
+    aiLauncherRowEl.appendChild(wrap);
+  });
+
+  const newBtn = document.createElement("button");
+  newBtn.type = "button";
+  newBtn.className = "action-btn launcher-new-btn";
+  newBtn.textContent = "+";
+  newBtn.setAttribute("title", "Add new AI");
+  newBtn.setAttribute("aria-label", "Add new AI");
+  newBtn.setAttribute("data-launcher-new", "1");
+  aiLauncherRowEl.appendChild(newBtn);
+}
+
 function getPromptMeta(id) {
   if (!promptMeta[id]) {
     promptMeta[id] = { pinned: false, favorite: false, lastOpenedAt: 0 };
@@ -446,6 +678,8 @@ function renderCategories() {
 
 function renderPromptList() {
   promptGridEl.innerHTML = "";
+  const fashionMode = String(selectedCategory || "").trim().toLowerCase() === "fashion";
+  promptGridEl.classList.toggle("fashion-grid", fashionMode);
   const loweredQuery = searchQuery.trim().toLowerCase();
   let visiblePrompts = promptData.filter((item) => {
     const categoryMatch = selectedCategory === "All" || item.category === selectedCategory;
@@ -493,6 +727,69 @@ function renderPromptList() {
   }
 
   visiblePrompts.forEach((item, index) => {
+    if (fashionMode) {
+      const card = document.createElement("article");
+      card.className = "prompt-card fashion-card";
+      card.setAttribute("data-prompt-index", String(index));
+      card.classList.toggle("is-selected", selectedPromptIndex === index);
+
+      const image = document.createElement("img");
+      image.className = "fashion-card-image";
+      image.src = getDisplayImages(item)[0] || createFallbackPoster(item.category, item.title);
+      image.alt = `${item.title} look`;
+
+      const body = document.createElement("div");
+      body.className = "fashion-card-body";
+
+      const top = document.createElement("div");
+      top.className = "fashion-card-top";
+
+      const titleNode = document.createElement("h4");
+      titleNode.textContent = item.title;
+      const star = document.createElement("span");
+      star.className = "prompt-card-star";
+      star.textContent = getPromptMeta(item.id).favorite ? "★" : "☆";
+      top.appendChild(titleNode);
+      top.appendChild(star);
+
+      const subtitle = document.createElement("p");
+      subtitle.className = "fashion-card-subtitle";
+      subtitle.textContent = item.tagline || "Tap and try this fashion prompt.";
+
+      const actions = document.createElement("div");
+      actions.className = "prompt-card-actions";
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "action-btn action-btn-secondary";
+      openBtn.textContent = "View Details";
+      openBtn.addEventListener("click", () => showPromptDetails(item.id));
+
+      const tryBtn = document.createElement("button");
+      tryBtn.type = "button";
+      tryBtn.className = "action-btn";
+      tryBtn.textContent = "Try Look Prompt";
+      tryBtn.addEventListener("click", () => handlePromptSend(item.title, item.prompt));
+
+      const testBtn = document.createElement("button");
+      testBtn.type = "button";
+      testBtn.className = "action-btn action-btn-secondary";
+      testBtn.textContent = "Test Prompt";
+      testBtn.addEventListener("click", () => openTestModal(item));
+
+      actions.appendChild(openBtn);
+      actions.appendChild(tryBtn);
+      actions.appendChild(testBtn);
+
+      body.appendChild(top);
+      body.appendChild(subtitle);
+      body.appendChild(actions);
+      card.appendChild(image);
+      card.appendChild(body);
+      promptGridEl.appendChild(card);
+      return;
+    }
+
     const card = document.createElement("article");
     card.className = "prompt-card";
     card.setAttribute("data-prompt-index", String(index));
@@ -653,6 +950,98 @@ function updateSearchUi() {
   searchClearBtn.classList.toggle("hidden", !searchQuery.trim());
 }
 
+const categoryShowcaseMeta = {
+  "app development": {
+    outcome: "From idea to build-ready feature spec",
+    chips: ["Flow", "APIs", "Acceptance"]
+  },
+  "education": {
+    outcome: "Study faster with structured plans",
+    chips: ["Roadmap", "Revision", "Mock"]
+  },
+  "learning mastery": {
+    outcome: "Beginner-to-advanced path clarity",
+    chips: ["Levels", "Practice", "Checklist"]
+  },
+  "code learning": {
+    outcome: "Understand code with guided dry runs",
+    chips: ["Trace", "Explain", "Debug"]
+  },
+  "content writing": {
+    outcome: "Generate publish-ready writing structure",
+    chips: ["SEO", "Hooks", "CTA"]
+  },
+  "filmmaking": {
+    outcome: "Build cinematic script structure quickly",
+    chips: ["Acts", "Scenes", "Dialogue"]
+  },
+  "fashion": {
+    outcome: "Style prompt ideas with visual impact",
+    chips: ["Look", "Mood", "Outfit"]
+  }
+};
+
+function getCategoryMeta(category, fallbackText = "") {
+  const key = String(category || "").trim().toLowerCase();
+  const preset = categoryShowcaseMeta[key];
+  if (preset) return preset;
+  return {
+    outcome: fallbackText || "Category-ready prompt collection",
+    chips: ["Template", "Practical", "Ready"]
+  };
+}
+
+function createFallbackPoster(category, title) {
+  const safeCategory = String(category || "General").slice(0, 28);
+  const safeTitle = String(title || "Prompt Showcase").slice(0, 56);
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1080 1920'>
+    <defs>
+      <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+        <stop offset='0%' stop-color='#130b1f'/>
+        <stop offset='45%' stop-color='#2f0c12'/>
+        <stop offset='100%' stop-color='#090a0f'/>
+      </linearGradient>
+      <linearGradient id='line' x1='0' y1='0' x2='1' y2='0'>
+        <stop offset='0%' stop-color='#ff7a00'/>
+        <stop offset='100%' stop-color='#e50914'/>
+      </linearGradient>
+    </defs>
+    <rect width='1080' height='1920' fill='url(#bg)'/>
+    <circle cx='820' cy='320' r='280' fill='rgba(229,9,20,0.22)'/>
+    <circle cx='260' cy='1460' r='240' fill='rgba(255,123,0,0.16)'/>
+    <rect x='110' y='130' width='860' height='8' rx='4' fill='url(#line)'/>
+    <text x='110' y='280' fill='#ffd3a6' font-size='44' font-family='Segoe UI, Arial, sans-serif' letter-spacing='7'>${safeCategory.toUpperCase()}</text>
+    <text x='110' y='390' fill='#f2f2f2' font-size='86' font-family='Segoe UI, Arial, sans-serif' font-weight='700'>PROMPT</text>
+    <text x='110' y='485' fill='#f2f2f2' font-size='86' font-family='Segoe UI, Arial, sans-serif' font-weight='700'>SHOWCASE</text>
+    <text x='110' y='620' fill='rgba(255,255,255,0.88)' font-size='40' font-family='Segoe UI, Arial, sans-serif'>${safeTitle}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function pickHeroSlidesByCategory() {
+  const categories = [...new Set(promptData.map((item) => item.category || "General"))];
+  return categories.slice(0, 8).map((category) => {
+    const items = promptData.filter((item) => (item.category || "General") === category);
+    const selected =
+      items.find((item) => item.featuredInSlider && item.mainImage) ||
+      items.find((item) => item.mainImage) ||
+      items[0];
+
+    const meta = getCategoryMeta(category, selected?.tagline || "");
+    const coverSrc = selected?.mainImage || createFallbackPoster(category, selected?.title || category);
+    return {
+      key: selected?.id || slugify(category),
+      src: coverSrc,
+      alt: `${category} showcase`,
+      kicker: category,
+      title: selected?.title || `${category} Prompt`,
+      description: meta.outcome,
+      chips: meta.chips,
+      prompt: selected?.prompt || "",
+    };
+  }).filter((slide) => slide && slide.prompt);
+}
+
 function renderImagePromptCards() {
   imagePromptGridEl.innerHTML = "";
   sliderImagePrompts.forEach((item) => {
@@ -681,10 +1070,18 @@ function renderImagePromptCards() {
     saveButton.setAttribute("data-save-title", item.title);
     saveButton.setAttribute("data-save-content", item.prompt);
 
+    const testButton = document.createElement("button");
+    testButton.className = "action-btn action-btn-secondary";
+    testButton.type = "button";
+    testButton.textContent = "Test Prompt";
+    testButton.setAttribute("data-test-title", item.title);
+    testButton.setAttribute("data-test-content", item.prompt);
+
     card.appendChild(img);
     card.appendChild(text);
     card.appendChild(copyButton);
     card.appendChild(saveButton);
+    card.appendChild(testButton);
     imagePromptGridEl.appendChild(card);
   });
 }
@@ -764,28 +1161,6 @@ function renderOrganizationFilters() {
   tagFilterEl.value = activeTagFilter;
 }
 
-function collectIntroImageUrls() {
-  const heroImages = promptData
-    .filter((item) => item.mainImage)
-    .slice(0, 8)
-    .map((item) => item.mainImage);
-
-  const sampleImages = promptData
-    .flatMap((item) => getDisplayImages(item).slice(0, 1))
-    .slice(0, 6);
-
-  return [...new Set([...heroImages, ...sampleImages])].filter(Boolean);
-}
-
-function preloadImage(url) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
-    img.src = url;
-  });
-}
-
 async function fetchWithTimeout(url, options = {}, timeoutMs = netTimeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -794,141 +1169,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = netTimeoutMs) {
   } finally {
     clearTimeout(timer);
   }
-}
-
-async function runIntroLoader() {
-  if (!introOverlayEl) return;
-  const start = Date.now();
-  const urls = collectIntroImageUrls();
-  const audioEndPromise = await playIntroAudio();
-
-  if (!urls.length) {
-    introStatusEl.textContent = "Starting...";
-  } else {
-    introStatusEl.textContent = "Starting...";
-  }
-
-  let loadedCount = 0;
-  const preloadTasks = urls.map(async (url) => {
-    const ok = await preloadImage(url);
-    loadedCount += 1;
-    if (introStatusEl && loadedCount >= urls.length) introStatusEl.textContent = "Ready";
-  });
-
-  await Promise.race([
-    Promise.all(preloadTasks),
-    new Promise((resolve) => setTimeout(resolve, introMaxWaitMs)),
-  ]);
-
-  const elapsed = Date.now() - start;
-  if (elapsed < introMinMs) {
-    await new Promise((resolve) => setTimeout(resolve, introMinMs - elapsed));
-  }
-
-  if (audioEndPromise) {
-    await audioEndPromise;
-  }
-
-  introOverlayEl.classList.add("is-hidden");
-}
-
-async function playIntroAudio() {
-  if (!introAudioEl) return;
-  try {
-    introAudioEl.currentTime = introAudioStartSec;
-    introAudioEl.volume = 0;
-    await introAudioEl.play();
-    return waitForIntroAudioSegmentEnd();
-  } catch (_error) {
-    if (introStatusEl) {
-      introStatusEl.textContent = "Tap anywhere to play intro...";
-    }
-    return waitForIntroTapToPlay();
-  }
-}
-
-function waitForIntroTapToPlay() {
-  return new Promise((resolve) => {
-    if (!introOverlayEl || !introAudioEl) {
-      resolve();
-      return;
-    }
-
-    const handleTap = async () => {
-      if (introStatusEl) {
-        introStatusEl.textContent = "Playing intro...";
-      }
-
-      try {
-        introAudioEl.currentTime = introAudioStartSec;
-        introAudioEl.volume = 0;
-        await introAudioEl.play();
-        await waitForIntroAudioSegmentEnd();
-      } catch (_error) {
-        // Continue intro even if user gesture playback still fails.
-      }
-
-      resolve();
-    };
-
-    introOverlayEl.addEventListener("pointerdown", handleTap, { once: true });
-  });
-}
-
-function waitForIntroAudioSegmentEnd() {
-  return new Promise((resolve) => {
-    if (!introAudioEl) {
-      resolve();
-      return;
-    }
-
-    const endAt = Math.max(introAudioStartSec, introAudioEndSec);
-    const fadeOutStartAt = Math.max(introAudioStartSec, endAt - introAudioFadeOutSec);
-    const fadeInEndAt = introAudioStartSec + introAudioFadeInSec;
-    let rafId = null;
-    const finalize = () => {
-      introAudioEl.pause();
-      introAudioEl.removeEventListener("ended", finalize);
-      introAudioEl.removeEventListener("error", finalize);
-      introAudioEl.removeEventListener("timeupdate", onTimeUpdate);
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
-      introAudioEl.volume = introAudioTargetVolume;
-      resolve();
-    };
-
-    const tickFade = () => {
-      const now = introAudioEl.currentTime;
-      let volume = introAudioTargetVolume;
-
-      if (now < fadeInEndAt) {
-        const fadeInProgress = Math.max(0, Math.min(1, (now - introAudioStartSec) / Math.max(0.01, introAudioFadeInSec)));
-        volume = introAudioTargetVolume * fadeInProgress;
-      }
-
-      if (now >= fadeOutStartAt) {
-        const fadeOutProgress = Math.max(0, Math.min(1, (endAt - now) / Math.max(0.01, introAudioFadeOutSec)));
-        volume = Math.min(volume, introAudioTargetVolume * fadeOutProgress);
-      }
-
-      introAudioEl.volume = Math.max(0, Math.min(introAudioTargetVolume, volume));
-      if (!introAudioEl.paused) {
-        rafId = requestAnimationFrame(tickFade);
-      }
-    };
-
-    const onTimeUpdate = () => {
-      if (introAudioEl.currentTime >= endAt) {
-        finalize();
-      }
-    };
-
-    introAudioEl.addEventListener("ended", finalize, { once: true });
-    introAudioEl.addEventListener("error", finalize, { once: true });
-    introAudioEl.addEventListener("timeupdate", onTimeUpdate);
-    tickFade();
-  });
 }
 
 async function checkPromptTyperBridge() {
@@ -1130,6 +1370,7 @@ function openTestModal(promptItem) {
   testModalTitleEl.textContent = `Test Prompt: ${promptItem.title}`;
   testInputEl.value = "";
   testOutputEl.textContent = "Type input and click Run Test.";
+  renderAiLaunchers();
   testModalEl.classList.remove("hidden");
   testInputEl.focus();
 }
@@ -1204,15 +1445,7 @@ async function deletePrompt(promptId) {
 }
 
 function setupHeroSlider() {
-  featuredHeroSlides = getFeaturedPrompts().slice(0, 8).map((item) => ({
-    key: item.id,
-    src: item.mainImage,
-    alt: item.title,
-    kicker: item.category || "Featured Prompt",
-    title: item.title,
-    description: item.tagline || item.prompt.slice(0, 110),
-    prompt: item.prompt
-  }));
+  featuredHeroSlides = pickHeroSlidesByCategory();
 
   sliderImagePrompts = featuredHeroSlides.map((slide) => ({
     key: slide.key,
@@ -1266,9 +1499,19 @@ function setupHeroSlider() {
     text.className = "hero-slide-text";
     text.textContent = slide.description;
 
+    const chipRow = document.createElement("div");
+    chipRow.className = "hero-slide-chips";
+    (slide.chips || []).forEach((chipText) => {
+      const chip = document.createElement("span");
+      chip.className = "hero-slide-chip";
+      chip.textContent = chipText;
+      chipRow.appendChild(chip);
+    });
+
     content.appendChild(kicker);
     content.appendChild(title);
     content.appendChild(text);
+    content.appendChild(chipRow);
     article.appendChild(img);
     article.appendChild(content);
     heroTrackEl.appendChild(article);
@@ -1385,6 +1628,11 @@ saveToPromptTyperBtn.addEventListener("click", async () => {
   await handlePromptSend(title, content, "Prompt Bank", null);
 });
 
+detailTestBtn?.addEventListener("click", () => {
+  if (!currentDetailPrompt) return;
+  openTestModal(currentDetailPrompt);
+});
+
 togglePinBtn.addEventListener("click", () => {
   if (!currentDetailPrompt) return;
   const meta = getPromptMeta(currentDetailPrompt.id);
@@ -1467,22 +1715,30 @@ testCloseBtn?.addEventListener("click", () => {
 
 testRunBtn?.addEventListener("click", () => {
   if (!pendingPlaygroundPrompt) return;
-  const input = testInputEl.value.trim();
-  const template = pendingPlaygroundPrompt.prompt || "";
-  const vars = parsePromptVariables(template);
-  const values = { input, user_input: input, query: input };
-  vars.forEach((variable) => {
-    if (!values[variable.key]) {
-      values[variable.key] = input;
-    }
-  });
-  const withInput = applyPromptVariables(template, values, vars);
-  testOutputEl.textContent = withInput;
+  const rendered = getPlaygroundRenderedPrompt();
+  testOutputEl.textContent = rendered || "No prompt to test.";
 });
 
-testOpenNewTabBtn?.addEventListener("click", () => {
-  const encoded = encodeURIComponent(testOutputEl.textContent || pendingPlaygroundPrompt?.prompt || "");
-  window.open(`https://chat.openai.com/?q=${encoded}`, "_blank", "noopener");
+aiLauncherRowEl?.addEventListener("click", (event) => {
+  const newBtn = event.target.closest("[data-launcher-new]");
+  if (newBtn) {
+    promptForNewAiLauncher();
+    return;
+  }
+
+  const removeBtn = event.target.closest("[data-launcher-remove]");
+  if (removeBtn) {
+    const id = removeBtn.getAttribute("data-launcher-remove");
+    if (id) removeCustomAiLauncher(id);
+    return;
+  }
+
+  const openBtn = event.target.closest("[data-launcher-open]");
+  if (!openBtn) return;
+  const id = openBtn.getAttribute("data-launcher-open");
+  const provider = getAllAiLaunchers().find((item) => item.id === id);
+  if (!provider) return;
+  openPromptInProvider(provider);
 });
 
 exportPromptsBtn?.addEventListener("click", () => {
@@ -1600,13 +1856,33 @@ imagePromptGridEl.addEventListener("click", (event) => {
   }
 
   const saveButton = event.target.closest("button[data-save-content]");
-  if (!saveButton) return;
-  handlePromptSend(
-    saveButton.getAttribute("data-save-title") || "Imported Prompt",
-    saveButton.getAttribute("data-save-content") || "",
-    "Prompt Bank",
-    saveButton
-  );
+  if (saveButton) {
+    handlePromptSend(
+      saveButton.getAttribute("data-save-title") || "Imported Prompt",
+      saveButton.getAttribute("data-save-content") || "",
+      "Prompt Bank",
+      saveButton
+    );
+    return;
+  }
+
+  const testButton = event.target.closest("button[data-test-content]");
+  if (!testButton) return;
+  openTestModal({
+    id: slugify(testButton.getAttribute("data-test-title") || "test-prompt"),
+    title: testButton.getAttribute("data-test-title") || "Prompt",
+    category: "Image Prompt",
+    prompt: testButton.getAttribute("data-test-content") || "",
+    tagline: "",
+    images: [],
+    mainImage: "",
+    featuredInSlider: false,
+    folder: "Image Prompt",
+    tags: [],
+    versions: [],
+    usageCount: 0,
+    lastUsedAt: 0
+  });
 });
 
 document.addEventListener("keydown", (event) => {
@@ -1648,7 +1924,7 @@ window.addEventListener("resize", () => {
 
 (async function init() {
   loadPromptMeta();
-  const introPromise = runIntroLoader();
+  loadAiLaunchers();
   await loadPromptLibrary();
   const restoredCount = restoreMissingFallbackPrompts();
   await checkPromptTyperBridge();
@@ -1661,7 +1937,6 @@ window.addEventListener("resize", () => {
   }
   updateSearchUi();
   renderAll();
-  await introPromise;
   if (window.location.hash === "#admin") {
     showAdminView();
   }
