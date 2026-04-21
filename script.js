@@ -226,6 +226,71 @@ Return concept name only.`,
     images: [
       "https://picsum.photos/seed/filmA/520/900"
     ]
+  },
+  {
+    id: "hero-startup-launch-strategy",
+    title: "Startup Launch Strategy Prompt",
+    category: "Business Growth",
+    tagline: "Create a 30-day launch blueprint with channels, milestones, and risk controls.",
+    prompt: `Act as a startup growth strategist. Build a 30-day launch plan for my product: [product name].
+
+Include audience, positioning, channel plan, content calendar, budget split, KPI targets, and weekly review actions.`,
+    featuredInSlider: true,
+    images: [
+      "https://source.unsplash.com/1600x900/?startup,team,meeting&sig=101"
+    ]
+  },
+  {
+    id: "hero-cinematic-brand-story",
+    title: "Cinematic Brand Story Prompt",
+    category: "Marketing",
+    tagline: "Design a premium brand narrative that feels visual, emotional, and memorable.",
+    prompt: `You are a brand filmmaker. Create a cinematic brand story for [brand name].
+
+Output: hook, tone board, 3-act script, visual cues, voice-over lines, and CTA variants for reels and ads.`,
+    featuredInSlider: true,
+    images: [
+      "https://source.unsplash.com/1600x900/?cinematic,neon,city&sig=102"
+    ]
+  },
+  {
+    id: "hero-fashion-lookbook-ai",
+    title: "Fashion Lookbook Prompt",
+    category: "Fashion",
+    tagline: "Generate high-conversion lookbook prompts for trend-forward outfit collections.",
+    prompt: `Act as a fashion creative director. Build a lookbook plan for [brand/style].
+
+Include 10 look concepts, shot style, lighting mood, styling notes, and social caption prompts.`,
+    featuredInSlider: true,
+    images: [
+      "https://source.unsplash.com/1600x900/?fashion,editorial,model&sig=103"
+    ]
+  },
+  {
+    id: "hero-developer-productivity-stack",
+    title: "Developer Productivity Prompt",
+    category: "Code Learning",
+    tagline: "Plan a focused dev workflow for fast shipping and less context switching.",
+    prompt: `Act as a senior engineering coach. Build my weekly developer productivity system for [project type].
+
+Include coding blocks, bug triage method, test checklist, review workflow, and anti-burnout rules.`,
+    featuredInSlider: true,
+    images: [
+      "https://source.unsplash.com/1600x900/?coding,developer,workspace&sig=104"
+    ]
+  },
+  {
+    id: "hero-ai-agent-design",
+    title: "AI Agent Design Prompt",
+    category: "AI Systems",
+    tagline: "Design practical AI agent architecture with tool-use, memory, and guardrails.",
+    prompt: `You are an AI systems architect. Design an agent workflow for [use case].
+
+Include role split, tools, memory strategy, failure handling, safety rules, and evaluation metrics.`,
+    featuredInSlider: true,
+    images: [
+      "https://source.unsplash.com/1600x900/?artificial-intelligence,robot,future&sig=105"
+    ]
   }
 ];
 
@@ -266,6 +331,10 @@ const heroOpenBtn = document.getElementById("heroOpenBtn");
 const heroBrowseBtn = document.getElementById("heroBrowseBtn");
 const heroPrevBtn = document.getElementById("heroPrevBtn");
 const heroNextBtn = document.getElementById("heroNextBtn");
+const userSessionChipEl = document.getElementById("userSessionChip");
+const logoutBtnEl = document.getElementById("logoutBtn");
+const welcomeBannerEl = document.getElementById("welcomeBanner");
+const appToastEl = document.getElementById("appToast");
 const closeAdminBtn = document.getElementById("closeAdminBtn");
 const adminForm = document.getElementById("adminForm");
 const adminPromptIdEl = document.getElementById("adminPromptId");
@@ -294,6 +363,7 @@ const testModalEl = document.getElementById("testModal");
 const testModalTitleEl = document.getElementById("testModalTitle");
 const testInputEl = document.getElementById("testInput");
 const testOutputEl = document.getElementById("testOutput");
+const testHintEl = document.getElementById("testHint");
 const testRunBtn = document.getElementById("testRunBtn");
 const testCloseBtn = document.getElementById("testCloseBtn");
 const aiLauncherRowEl = document.getElementById("aiLauncherRow");
@@ -317,47 +387,86 @@ let pendingVariableSubmission = null;
 let pendingPlaygroundPrompt = null;
 let renderedPromptIds = [];
 let customAiLaunchers = [];
+let currentSessionUser = null;
 
 const promptMetaStorageKey = "prompt_bank_meta_v1";
 const aiLaunchersStorageKey = "prompt_bank_ai_launchers_v1";
+const promptLibraryCacheKey = "prompt_bank_library_cache_v2";
+const heroSliderEnabled = true;
 const defaultAiLaunchers = [
   {
     id: "chatgpt",
     name: "ChatGPT",
     symbol: "C",
     iconUrl: "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
-    urlTemplate: "https://chatgpt.com/?q={{prompt}}"
+    urlTemplate: "https://chatgpt.com/?q={{prompt}}",
+    homeUrl: "https://chatgpt.com/",
+    prefillMode: "url"
   },
   {
     id: "gemini",
     name: "Gemini",
     symbol: "G",
     iconUrl: "https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64",
-    urlTemplate: "https://gemini.google.com/app?q={{prompt}}"
+    urlTemplate: "https://gemini.google.com/app",
+    homeUrl: "https://gemini.google.com/app",
+    prefillMode: "clipboard"
   },
   {
     id: "grok",
     name: "Grok",
     symbol: "X",
     iconUrl: "https://www.google.com/s2/favicons?domain=grok.com&sz=64",
-    urlTemplate: "https://grok.com/?q={{prompt}}"
+    urlTemplate: "https://grok.com/",
+    homeUrl: "https://grok.com/",
+    prefillMode: "clipboard"
   },
   {
     id: "deepseek",
     name: "DeepSeek",
     symbol: "D",
     iconUrl: "https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=64",
-    urlTemplate: "https://chat.deepseek.com/?q={{prompt}}"
+    urlTemplate: "https://chat.deepseek.com/",
+    homeUrl: "https://chat.deepseek.com/",
+    prefillMode: "clipboard"
   },
   {
     id: "perchance",
     name: "Perchance",
     symbol: "P",
     iconUrl: "https://www.google.com/s2/favicons?domain=perchance.org&sz=64",
-    urlTemplate: "https://perchance.org/ai-text-generator?q={{prompt}}"
+    urlTemplate: "https://perchance.org/ai-text-generator",
+    homeUrl: "https://perchance.org/ai-text-generator",
+    prefillMode: "clipboard"
   }
 ];
-const netTimeoutMs = 1800;
+const netTimeoutMs = 12000;
+const maxImageUploadBytes = 8 * 1024 * 1024;
+
+function showToast(message) {
+  if (!appToastEl || !message) return;
+  appToastEl.textContent = message;
+  appToastEl.classList.remove("hidden");
+  window.clearTimeout(showToast._timer);
+  showToast._timer = window.setTimeout(() => {
+    appToastEl.classList.add("hidden");
+  }, 2600);
+}
+
+function applySessionUi(user) {
+  if (!user) return;
+  const fullName = String(user.fullName || "User").trim();
+  const firstName = fullName.split(/\s+/)[0] || "User";
+  if (userSessionChipEl) {
+    userSessionChipEl.textContent = `Hi ${firstName}!`;
+  }
+  if (welcomeBannerEl) {
+    welcomeBannerEl.textContent = "Welcome to Prompt Bank - Your Personal Fashion AI Studio";
+  }
+  if (openAdminBtn) {
+    openAdminBtn.classList.toggle("hidden", String(user.role || "user") !== "admin");
+  }
+}
 
 function slugify(value) {
   return String(value || "")
@@ -446,7 +555,9 @@ function loadAiLaunchers() {
         name: String(item.name || "Custom AI").trim() || "Custom AI",
         symbol: String(item.symbol || "").trim(),
         iconUrl: String(item.iconUrl || "").trim(),
-        urlTemplate: String(item.urlTemplate || "").trim()
+        urlTemplate: String(item.urlTemplate || "").trim(),
+        homeUrl: String(item.homeUrl || "").trim(),
+        prefillMode: String(item.prefillMode || "url").trim() === "clipboard" ? "clipboard" : "url"
       }))
       .filter((item) => /^https?:\/\//i.test(item.urlTemplate));
   } catch (_error) {
@@ -490,6 +601,44 @@ function buildProviderUrl(urlTemplate, promptText) {
   return urlTemplate + (urlTemplate.includes("?") ? "&q=" : "?q=") + encoded;
 }
 
+function providerBaseUrl(provider) {
+  if (provider.homeUrl && /^https?:\/\//i.test(provider.homeUrl)) {
+    return provider.homeUrl;
+  }
+  try {
+    const parsed = new URL(provider.urlTemplate);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch (_error) {
+    return provider.urlTemplate;
+  }
+}
+
+async function copyTextToClipboard(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_error) {
+    // Fallback below.
+  }
+  try {
+    const temp = document.createElement("textarea");
+    temp.value = text;
+    temp.setAttribute("readonly", "");
+    temp.style.position = "fixed";
+    temp.style.opacity = "0";
+    document.body.appendChild(temp);
+    temp.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(temp);
+    return Boolean(ok);
+  } catch (_error) {
+    return false;
+  }
+}
+
 function getPlaygroundRenderedPrompt() {
   if (!pendingPlaygroundPrompt) return "";
   const input = testInputEl.value.trim();
@@ -504,7 +653,7 @@ function getPlaygroundRenderedPrompt() {
   return applyPromptVariables(template, values, vars);
 }
 
-function openPromptInProvider(provider) {
+async function openPromptInProvider(provider) {
   const content = (testOutputEl.textContent || "").trim();
   const rendered = content && content !== "Type input and click Run Test."
     ? content
@@ -513,8 +662,33 @@ function openPromptInProvider(provider) {
     testOutputEl.textContent = "Run test first or type input.";
     return;
   }
-  const url = buildProviderUrl(provider.urlTemplate, rendered);
-  window.open(url, "_blank", "noopener");
+  const prefillMode = provider.prefillMode === "clipboard" ? "clipboard" : "url";
+  const url = prefillMode === "clipboard"
+    ? providerBaseUrl(provider)
+    : buildProviderUrl(provider.urlTemplate, rendered);
+  const copyPromise = prefillMode === "clipboard"
+    ? copyTextToClipboard(rendered)
+    : Promise.resolve(false);
+
+  const popup = window.open(url, "_blank", "noopener");
+  if (!popup) {
+    if (testHintEl) {
+      testHintEl.textContent = "Popup blocked. Please allow popups for this site.";
+    }
+    return;
+  }
+
+  const copied = await copyPromise;
+
+  if (testHintEl) {
+    if (prefillMode === "clipboard") {
+      testHintEl.textContent = copied
+        ? `${provider.name} opened. Prompt copied, just paste with Ctrl+V.`
+        : `${provider.name} opened. Copy blocked, copy prompt manually from below.`;
+    } else {
+      testHintEl.textContent = `Opened ${provider.name} with current rendered prompt.`;
+    }
+  }
 }
 
 function promptForNewAiLauncher() {
@@ -546,7 +720,9 @@ function promptForNewAiLauncher() {
     name: cleanName,
     symbol: cleanName.slice(0, 1).toUpperCase(),
     iconUrl,
-    urlTemplate: cleanUrl
+    urlTemplate: cleanUrl,
+    homeUrl: cleanUrl,
+    prefillMode: "url"
   });
   saveAiLaunchers();
   renderAiLaunchers();
@@ -903,7 +1079,11 @@ function showDetailView() {
 }
 
 function showListView() {
-  heroSectionEl.classList.remove("hidden");
+  if (heroSliderEnabled) {
+    heroSectionEl.classList.remove("hidden");
+  } else {
+    heroSectionEl.classList.add("hidden");
+  }
   categoriesTitleEl.classList.remove("hidden");
   categoriesEl.classList.remove("hidden");
   imagePromptsViewEl.classList.add("hidden");
@@ -935,6 +1115,10 @@ function showImagePromptView(imageKey) {
 }
 
 function showAdminView() {
+  if (!currentSessionUser || String(currentSessionUser.role || "user") !== "admin") {
+    showToast("Admin access only.");
+    return;
+  }
   heroSectionEl.classList.add("hidden");
   categoriesTitleEl.classList.add("hidden");
   categoriesEl.classList.add("hidden");
@@ -1019,27 +1203,47 @@ function createFallbackPoster(category, title) {
 }
 
 function pickHeroSlidesByCategory() {
-  const categories = [...new Set(promptData.map((item) => item.category || "General"))];
-  return categories.slice(0, 8).map((category) => {
-    const items = promptData.filter((item) => (item.category || "General") === category);
-    const selected =
-      items.find((item) => item.featuredInSlider && item.mainImage) ||
-      items.find((item) => item.mainImage) ||
-      items[0];
+  return getFeaturedPrompts()
+    .slice(0, 5)
+    .map((item) => {
+      const meta = getCategoryMeta(item.category, item.tagline || "");
+      const coverSrc = item.mainImage || createFallbackPoster(item.category, item.title);
+      return {
+        key: item.id,
+        src: coverSrc,
+        alt: `${item.category} showcase`,
+        kicker: item.category,
+        title: item.title,
+        description: item.tagline || meta.outcome,
+        chips: meta.chips,
+        prompt: item.prompt,
+      };
+    });
+}
 
-    const meta = getCategoryMeta(category, selected?.tagline || "");
-    const coverSrc = selected?.mainImage || createFallbackPoster(category, selected?.title || category);
-    return {
-      key: selected?.id || slugify(category),
-      src: coverSrc,
-      alt: `${category} showcase`,
-      kicker: category,
-      title: selected?.title || `${category} Prompt`,
-      description: meta.outcome,
-      chips: meta.chips,
-      prompt: selected?.prompt || "",
-    };
-  }).filter((slide) => slide && slide.prompt);
+function ensureHeroSeedPrompts() {
+  const seedPrompts = fallbackPromptData
+    .filter((item) => item.featuredInSlider && item.images?.length)
+    .slice(-5);
+  const byId = new Map(promptData.map((item) => [item.id, item]));
+  let changed = false;
+
+  seedPrompts.forEach((seed) => {
+    const existing = byId.get(seed.id);
+    if (existing) {
+      if (!existing.mainImage || !existing.featuredInSlider) {
+        existing.mainImage = seed.images[0];
+        existing.images = existing.images?.length ? existing.images : [seed.images[0]];
+        existing.featuredInSlider = true;
+        changed = true;
+      }
+      return;
+    }
+    promptData.unshift(normalizePrompt(seed, promptData.length));
+    changed = true;
+  });
+
+  return changed;
 }
 
 function renderImagePromptCards() {
@@ -1189,6 +1393,17 @@ async function checkPromptTyperBridge() {
 
 async function loadPromptLibrary() {
   try {
+    const cachedRaw = localStorage.getItem(promptLibraryCacheKey);
+    const cached = cachedRaw ? JSON.parse(cachedRaw) : null;
+    if (Array.isArray(cached) && cached.length) {
+      promptData = cached.map(normalizePrompt);
+      return;
+    }
+  } catch (_cacheError) {
+    // continue to bridge/fallback load path
+  }
+
+  try {
     const response = await fetchWithTimeout(`${promptTyperBridgeUrl}/prompt-bank-data`);
     if (!response.ok) {
       throw new Error("No saved prompt bank data");
@@ -1198,8 +1413,10 @@ async function loadPromptLibrary() {
       throw new Error("Invalid prompt bank payload");
     }
     promptData = payload.prompts.map(normalizePrompt);
+    localStorage.setItem(promptLibraryCacheKey, JSON.stringify(promptData));
   } catch (_error) {
     promptData = fallbackPromptData.map(normalizePrompt);
+    localStorage.setItem(promptLibraryCacheKey, JSON.stringify(promptData));
   }
 }
 
@@ -1219,16 +1436,45 @@ function restoreMissingFallbackPrompts() {
 }
 
 async function savePromptLibrary() {
-  const response = await fetchWithTimeout(`${promptTyperBridgeUrl}/prompt-bank-data`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompts: promptData })
-  });
+  const requestBody = JSON.stringify({ prompts: promptData });
+  let bridgeSaved = false;
+  let bridgeError = "";
+  let localSaved = false;
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok === false) {
-    throw new Error(payload.error || "Could not save Prompt Bank");
+  try {
+    const response = await fetchWithTimeout(
+      `${promptTyperBridgeUrl}/prompt-bank-data`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody
+      },
+      30000
+    );
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || "Could not save Prompt Bank");
+    }
+    bridgeSaved = true;
+  } catch (error) {
+    bridgeError = String(error?.message || "Could not reach PromptTyper bridge");
   }
+
+  try {
+    localStorage.setItem(promptLibraryCacheKey, JSON.stringify(promptData));
+    localSaved = true;
+  } catch (_cacheError) {
+    if (!bridgeSaved) {
+      throw new Error(`${bridgeError || "Save failed"} (local backup also failed: storage full)`);
+    }
+  }
+
+  if (!bridgeSaved && !localSaved) {
+    throw new Error(bridgeError || "Could not save Prompt Bank");
+  }
+
+  return { bridgeSaved, localSaved };
 }
 
 async function sendPromptToPromptTyper(title, content, source) {
@@ -1370,6 +1616,9 @@ function openTestModal(promptItem) {
   testModalTitleEl.textContent = `Test Prompt: ${promptItem.title}`;
   testInputEl.value = "";
   testOutputEl.textContent = "Type input and click Run Test.";
+  if (testHintEl) {
+    testHintEl.textContent = "Tip: click any AI button to open with current rendered prompt.";
+  }
   renderAiLaunchers();
   testModalEl.classList.remove("hidden");
   testInputEl.focus();
@@ -1445,6 +1694,14 @@ async function deletePrompt(promptId) {
 }
 
 function setupHeroSlider() {
+  if (!heroSliderEnabled) {
+    featuredHeroSlides = [];
+    sliderImagePrompts = [];
+    renderImagePromptCards();
+    heroSectionEl.classList.add("hidden");
+    return;
+  }
+
   featuredHeroSlides = pickHeroSlidesByCategory();
 
   sliderImagePrompts = featuredHeroSlides.map((slide) => ({
@@ -1656,6 +1913,11 @@ imageBackBtn.addEventListener("click", showListView);
 openAdminBtn.addEventListener("click", showAdminView);
 closeAdminBtn.addEventListener("click", showListView);
 adminResetBtn.addEventListener("click", resetAdminForm);
+logoutBtnEl?.addEventListener("click", () => {
+  if (!window.PromptBankAuth) return;
+  window.PromptBankAuth.logout();
+  window.location.href = window.PromptBankAuth.appPath("login/index.html");
+});
 searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
 });
@@ -1711,6 +1973,9 @@ variablesSubmitBtn?.addEventListener("click", () => {
 testCloseBtn?.addEventListener("click", () => {
   pendingPlaygroundPrompt = null;
   testModalEl.classList.add("hidden");
+  if (testHintEl) {
+    testHintEl.textContent = "Tip: click any AI button to open with current rendered prompt.";
+  }
 });
 
 testRunBtn?.addEventListener("click", () => {
@@ -1780,8 +2045,30 @@ adminImageEl.addEventListener("change", async () => {
     updateAdminPreview(editingExistingImage);
     return;
   }
-  pendingAdminImageData = await readFileAsDataUrl(file);
-  updateAdminPreview(pendingAdminImageData);
+  if (!String(file.type || "").startsWith("image/")) {
+    pendingAdminImageData = "";
+    adminImageEl.value = "";
+    adminStatusEl.textContent = "Please upload a valid image file.";
+    updateAdminPreview(editingExistingImage);
+    return;
+  }
+  if (file.size > maxImageUploadBytes) {
+    pendingAdminImageData = "";
+    adminImageEl.value = "";
+    adminStatusEl.textContent = "Image is too large. Keep image under 8 MB.";
+    updateAdminPreview(editingExistingImage);
+    return;
+  }
+  try {
+    pendingAdminImageData = await readFileAsDataUrl(file);
+    updateAdminPreview(pendingAdminImageData);
+    adminStatusEl.textContent = "Image ready. Click Save Prompt.";
+  } catch (error) {
+    pendingAdminImageData = "";
+    adminImageEl.value = "";
+    adminStatusEl.textContent = error.message || "Could not read selected image.";
+    updateAdminPreview(editingExistingImage);
+  }
 });
 
 adminForm.addEventListener("submit", async (event) => {
@@ -1832,10 +2119,12 @@ adminForm.addEventListener("submit", async (event) => {
   }
 
   try {
-    await savePromptLibrary();
+    const saveResult = await savePromptLibrary();
     renderAll();
-    adminStatusEl.textContent = "Prompt saved.";
     resetAdminForm();
+    adminStatusEl.textContent = saveResult.bridgeSaved
+      ? "Prompt saved."
+      : "Prompt saved locally. Open PromptTyper app to sync bridge.";
   } catch (error) {
     adminStatusEl.textContent = error.message;
   }
@@ -1893,6 +2182,9 @@ document.addEventListener("keydown", (event) => {
     if (!testModalEl.classList.contains("hidden")) {
       pendingPlaygroundPrompt = null;
       testModalEl.classList.add("hidden");
+      if (testHintEl) {
+        testHintEl.textContent = "Tip: click any AI button to open with current rendered prompt.";
+      }
     }
     return;
   }
@@ -1923,20 +2215,34 @@ window.addEventListener("resize", () => {
 });
 
 (async function init() {
+  if (!window.PromptBankAuth) {
+    window.location.href = "./login/index.html";
+    return;
+  }
+  currentSessionUser = window.PromptBankAuth.requireAuth();
+  if (!currentSessionUser) return;
+  applySessionUi(currentSessionUser);
+
   loadPromptMeta();
   loadAiLaunchers();
   await loadPromptLibrary();
-  const restoredCount = restoreMissingFallbackPrompts();
-  await checkPromptTyperBridge();
-  if (restoredCount > 0) {
+  const heroSeedChanged = ensureHeroSeedPrompts();
+  if (heroSeedChanged) {
     try {
       await savePromptLibrary();
     } catch (_error) {
-      // Keep UI usable even if local bridge save is unavailable.
+      // Keep UI usable even if bridge sync fails.
     }
   }
+  await checkPromptTyperBridge();
   updateSearchUi();
   renderAll();
+
+  const postLoginToast = window.PromptBankAuth.takePostLoginToast();
+  if (postLoginToast) {
+    showToast(postLoginToast);
+  }
+
   if (window.location.hash === "#admin") {
     showAdminView();
   }

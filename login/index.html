@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login | Prompt Bank</title>
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-card">
+      <span class="demo-badge">Demo Mode - Local Laptop Only</span>
+      <p class="eyebrow">Prompt Bank Access</p>
+      <h1>Login</h1>
+      <p class="auth-subtitle">Welcome to Prompt Bank - Your Personal Fashion AI Studio</p>
+
+      <form id="loginForm" class="auth-form" novalidate>
+        <label class="admin-label" for="loginEmail">Email</label>
+        <input class="admin-input" id="loginEmail" type="email" autocomplete="email" required />
+
+        <label class="admin-label" for="loginPassword">Password</label>
+        <div class="password-row">
+          <input class="admin-input" id="loginPassword" type="password" autocomplete="current-password" required />
+          <button class="hero-btn" id="toggleLoginPassword" type="button">Show</button>
+        </div>
+
+        <p class="auth-error" id="loginError"></p>
+        <button class="action-btn" type="submit">Login</button>
+      </form>
+
+      <p class="auth-switch">Don't have an account? <a href="../register/index.html">Register</a></p>
+
+      <div class="demo-accounts">
+        <p><strong>Demo User:</strong> student@demo.com / 123456</p>
+        <p><strong>Demo Admin:</strong> admin@demo.com / admin123</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="../auth.js"></script>
+  <script>
+    // LOCAL DEMO ONLY
+    const auth = window.PromptBankAuth;
+    const form = document.getElementById("loginForm");
+    const emailEl = document.getElementById("loginEmail");
+    const passwordEl = document.getElementById("loginPassword");
+    const errorEl = document.getElementById("loginError");
+    const toggleBtn = document.getElementById("toggleLoginPassword");
+
+    if (auth.getSessionUser()) {
+      auth.goToDashboard();
+    }
+
+    function setError(message) {
+      errorEl.textContent = message || "";
+      errorEl.classList.toggle("is-visible", Boolean(message));
+    }
+
+    function validateForm() {
+      const email = emailEl.value.trim();
+      const password = passwordEl.value;
+      if (!/^\S+@\S+\.\S+$/.test(email)) return "Please enter a valid email.";
+      if (!password) return "Password is required.";
+      return "";
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      const showing = passwordEl.type === "text";
+      passwordEl.type = showing ? "password" : "text";
+      toggleBtn.textContent = showing ? "Show" : "Hide";
+    });
+
+    [emailEl, passwordEl].forEach((input) => {
+      input.addEventListener("input", () => {
+        setError(validateForm());
+      });
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const validationError = validateForm();
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      try {
+        auth.loginUser(emailEl.value, passwordEl.value);
+        auth.setPostLoginToast("Login successful! Try the Fashion Virtual Try-On now.");
+        auth.goToDashboard();
+      } catch (error) {
+        setError(error.message || "Login failed.");
+      }
+    });
+  </script>
+</body>
+</html>

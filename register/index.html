@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register | Prompt Bank</title>
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-card">
+      <span class="demo-badge">Demo Mode - Local Laptop Only</span>
+      <p class="eyebrow">Prompt Bank Access</p>
+      <h1>Create Account</h1>
+      <p class="auth-subtitle">Welcome to Prompt Bank - Your Personal Fashion AI Studio</p>
+
+      <form id="registerForm" class="auth-form" novalidate>
+        <label class="admin-label" for="fullName">Full Name</label>
+        <input class="admin-input" id="fullName" type="text" autocomplete="name" required />
+
+        <label class="admin-label" for="registerEmail">Email</label>
+        <input class="admin-input" id="registerEmail" type="email" autocomplete="email" required />
+
+        <label class="admin-label" for="registerPassword">Password</label>
+        <div class="password-row">
+          <input class="admin-input" id="registerPassword" type="password" autocomplete="new-password" required />
+          <button class="hero-btn" id="toggleRegisterPassword" type="button">Show</button>
+        </div>
+
+        <label class="admin-label" for="mobileNumber">Mobile Number (optional)</label>
+        <input class="admin-input" id="mobileNumber" type="tel" autocomplete="tel" />
+
+        <p class="auth-error" id="registerError"></p>
+        <button class="action-btn" type="submit">Sign Up</button>
+      </form>
+
+      <p class="auth-switch">Already have an account? <a href="../login/index.html">Login</a></p>
+    </section>
+  </main>
+
+  <script src="../auth.js"></script>
+  <script>
+    // LOCAL DEMO ONLY
+    const auth = window.PromptBankAuth;
+    const form = document.getElementById("registerForm");
+    const fullNameEl = document.getElementById("fullName");
+    const emailEl = document.getElementById("registerEmail");
+    const passwordEl = document.getElementById("registerPassword");
+    const mobileEl = document.getElementById("mobileNumber");
+    const errorEl = document.getElementById("registerError");
+    const toggleBtn = document.getElementById("toggleRegisterPassword");
+
+    if (auth.getSessionUser()) {
+      auth.goToDashboard();
+    }
+
+    function setError(message) {
+      errorEl.textContent = message || "";
+      errorEl.classList.toggle("is-visible", Boolean(message));
+    }
+
+    function validateForm() {
+      const fullName = fullNameEl.value.trim();
+      const email = emailEl.value.trim();
+      const password = passwordEl.value;
+      const mobile = mobileEl.value.trim();
+
+      if (!fullName) return "Full name is required.";
+      if (!/^\S+@\S+\.\S+$/.test(email)) return "Please enter a valid email.";
+      if (password.length < 6) return "Password must be at least 6 characters.";
+      if (mobile && !/^[0-9+\-\s()]{7,20}$/.test(mobile)) return "Enter a valid mobile number.";
+      return "";
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      const showing = passwordEl.type === "text";
+      passwordEl.type = showing ? "password" : "text";
+      toggleBtn.textContent = showing ? "Show" : "Hide";
+    });
+
+    [fullNameEl, emailEl, passwordEl, mobileEl].forEach((input) => {
+      input.addEventListener("input", () => {
+        setError(validateForm());
+      });
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const validationError = validateForm();
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      try {
+        auth.registerUser({
+          fullName: fullNameEl.value,
+          email: emailEl.value,
+          password: passwordEl.value,
+          mobile: mobileEl.value
+        });
+        auth.setPostLoginToast("Login successful! Try the Fashion Virtual Try-On now.");
+        auth.goToDashboard();
+      } catch (error) {
+        setError(error.message || "Signup failed.");
+      }
+    });
+  </script>
+</body>
+</html>
